@@ -16,6 +16,9 @@ export class WorkoutDB extends Dexie {
       sessionLogs: 'id, date, programLiftId',
       settings: 'id',
     })
+    this.version(2).stores({
+      programLifts: 'id, catalogId, addedAt',
+    })
   }
 }
 

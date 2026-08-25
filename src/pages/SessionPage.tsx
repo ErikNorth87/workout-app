@@ -38,7 +38,10 @@ export function SessionPage() {
   }, [])
 
   const weekday = parseIsoDate(date).getDay()
-  const progress = settings ? cycleProgress(settings.programStartIso, parseIsoDate(date)) : null
+  const progress = useMemo(
+    () => (settings ? cycleProgress(settings.programStartIso, parseIsoDate(date)) : null),
+    [settings, date],
+  )
   const day = useMemo(() => {
     if (!settings) return undefined
     return buildSchedule(lifts, settings.weekdays).find((item) => item.weekday === weekday)
