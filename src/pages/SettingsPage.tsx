@@ -24,8 +24,9 @@ export function SettingsPage() {
   return (
     <>
       <header className="topbar">
+        <p className="kicker">Device</p>
         <h1>Settings</h1>
-        <p className="muted">Units, training days, and install.</p>
+        <p className="muted">Local-only. Same install path as a plate calculator PWA.</p>
       </header>
       <main className="page">
         <section className="card">
@@ -46,7 +47,7 @@ export function SettingsPage() {
         </section>
         <section className="card">
           <h2>Training days</h2>
-          <p className="muted">The scheduler still keeps conflicting lifts off consecutive days.</p>
+          <p className="muted">Pick the days you can train. Conflicting muscle groups still will not land on consecutive days.</p>
           <div className="weekday-grid">
             {ALL_DAYS.map((day) => {
               const on = settings.weekdays.includes(day)
@@ -71,8 +72,8 @@ export function SettingsPage() {
         <section className="card">
           <h2>Install on your phone</h2>
           <p className="muted">
-            iPhone: Safari → Share → Add to Home Screen. Android: Chrome → menu → Install app / Add to Home
-            screen.
+            Open https://ErikNorth87.github.io/workout-app/ in Safari (iPhone) or Chrome (Android). iPhone: Share →
+            Add to Home Screen. Android: menu → Install app / Add to Home screen.
           </p>
         </section>
         <section className="card">

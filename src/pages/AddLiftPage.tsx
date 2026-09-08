@@ -1,17 +1,34 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { catalogById } from '../data/lifts'
-import { addProgramLift, getSettings } from '../db/store'
+import { MuscleChips } from '../components/MuscleChips'
+import { OneRmPrompt } from '../components/OneRmPrompt'
+import { PATTERN_LABELS } from '../data/lifts'
+import { addProgramLift, getSettings, resolveCatalog } from '../db/store'
 import { cycleProgress } from '../engine/dates'
 import { displayToLb } from '../engine/trainingMax'
+import type { CatalogLift, WeightUnit } from '../types'
 
 export function AddLiftPage() {
   const { catalogId } = useParams()
   const navigate = useNavigate()
-  const lift = catalogId ? catalogById(catalogId) : undefined
+  const [lift, setLift] = useState<CatalogLift | null | undefined>(undefined)
+  const [unit, setUnit] = useState<WeightUnit>('lb')
   const [knowsMax, setKnowsMax] = useState<boolean | null>(null)
   const [maxInput, setMaxInput] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!catalogId) {
+      setLift(null)
+      return
+    }
+    void Promise.all([resolveCatalog(catalogId), getSettings()]).then(([next, settings]) => {
+      setLift(next ?? null)
+      setUnit(settings.unit)
+    })
+  }, [catalogId])
+
+  if (lift === undefined) return <div className="page muted">Loading…</div>
 
   if (!lift) {
     return (
@@ -54,27 +71,18 @@ export function AddLiftPage() {
   return (
     <>
       <header className="topbar">
+        <p className="kicker">{PATTERN_LABELS[lift.pattern]}</p>
         <h1>{lift.name}</h1>
-        <p className="muted">Do you know your one-rep max?</p>
+        <MuscleChips muscles={lift.muscles} />
       </header>
       <main className="page">
-        <div className="choice">
-          <button type="button" className="btn secondary" aria-pressed={knowsMax === true} onClick={() => setKnowsMax(true)}>
-            Yes
-          </button>
-          <button type="button" className="btn secondary" aria-pressed={knowsMax === false} onClick={() => setKnowsMax(false)}>
-            No
-          </button>
-        </div>
-        {knowsMax === true ? (
-          <label className="card">
-            1RM ({getSettingsUnitHint()})
-            <input className="input" inputMode="decimal" value={maxInput} onChange={(e) => setMaxInput(e.target.value)} />
-          </label>
-        ) : null}
-        {knowsMax === false ? (
-          <p className="card muted">We’ll start with a testing workout, then estimate your 1RM from a hard set of 5+.</p>
-        ) : null}
+        <OneRmPrompt
+          knowsMax={knowsMax}
+          onKnowsMax={setKnowsMax}
+          maxInput={maxInput}
+          onMaxInput={setMaxInput}
+          unit={unit}
+        />
         {error ? <p className="warn">{error}</p> : null}
         <button className="btn" type="button" onClick={() => void onSave()}>
           Add to program
@@ -85,8 +93,4 @@ export function AddLiftPage() {
       </main>
     </>
   )
-}
-
-function getSettingsUnitHint() {
-  return 'lb or kg from Settings'
 }

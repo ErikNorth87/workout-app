@@ -56,12 +56,37 @@ describe('scheduler', () => {
     expect(consecutiveConflicts(plan)).toEqual([])
   })
 
-  it('attaches rows to bench day', () => {
+  it('uses a free training day for an accessory before stacking', () => {
     const plan = buildSchedule(
       [join('bench-press'), join('ohp'), join('barbell-row')],
       [1, 2, 4, 5],
     )
-    const benchDay = plan.find((day) => day.lifts.some((l) => l.catalog.id === 'bench-press'))
-    expect(benchDay?.lifts.some((l) => l.catalog.id === 'barbell-row')).toBe(true)
+    expect(plan.flatMap((day) => day.lifts.map((lift) => lift.catalog.id)).sort()).toEqual(
+      ['barbell-row', 'bench-press', 'ohp'].sort(),
+    )
+    expect(plan).toHaveLength(3)
+    const rowDay = plan.find((day) => day.lifts.some((lift) => lift.catalog.id === 'barbell-row'))
+    const benchDay = plan.find((day) => day.lifts.some((lift) => lift.catalog.id === 'bench-press'))
+    expect(rowDay?.weekday).not.toBe(benchDay?.weekday)
+  })
+
+  it('stacks an accessory on the matching main when no weekday is left', () => {
+    const plan = buildSchedule(
+      [join('ohp'), join('deadlift'), join('bench-press'), join('back-squat'), join('barbell-row')],
+      [1, 2, 4, 5],
+    )
+    expect(plan).toHaveLength(4)
+    const benchDay = plan.find((day) => day.lifts.some((lift) => lift.catalog.id === 'bench-press'))
+    expect(benchDay?.lifts.some((lift) => lift.catalog.id === 'barbell-row')).toBe(true)
+  })
+
+  it('keeps every selected lift on the week even when days are shared', () => {
+    const ids = ['back-squat', 'bench-press', 'ohp', 'barbell-row', 'barbell-curl']
+    const plan = buildSchedule(
+      ids.map((id) => join(id)),
+      [1, 2, 4, 5],
+    )
+    expect(plan.flatMap((day) => day.lifts.map((lift) => lift.catalog.id)).sort()).toEqual([...ids].sort())
+    expect(plan.length).toBeGreaterThanOrEqual(4)
   })
 })

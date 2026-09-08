@@ -53,6 +53,45 @@ export function dateForWeekday(weekMondayIso: string, weekday: number): string {
   return addDaysIso(weekMondayIso, offset)
 }
 
+export function shiftMonday(mondayIso: string, weeks: number): string {
+  return addDaysIso(mondayIso, weeks * 7)
+}
+
+export function daysOfWeek(mondayIso: string): Array<{ weekday: number; iso: string }> {
+  return [1, 2, 3, 4, 5, 6, 0].map((weekday) => ({
+    weekday,
+    iso: dateForWeekday(mondayIso, weekday),
+  }))
+}
+
+export function formatWeekRange(mondayIso: string): string {
+  const start = parseIsoDate(mondayIso)
+  const end = parseIsoDate(addDaysIso(mondayIso, 6))
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${fmt(start)} – ${fmt(end)}`
+}
+
+export function mondayForCycleWeek(
+  programStartIso: string,
+  cycleNumber: number,
+  cycleWeek: CycleWeek,
+): string {
+  const weekIndex = (cycleNumber - 1) * 4 + (cycleWeek - 1)
+  return addDaysIso(programStartIso, weekIndex * 7)
+}
+
+export function nextTrainingIso(
+  mondayIso: string,
+  todayIso: string,
+  trainingWeekdays: number[],
+): string {
+  const days = daysOfWeek(mondayIso)
+  const upcoming = days.find((day) => day.iso >= todayIso && trainingWeekdays.includes(day.weekday))
+  if (upcoming) return upcoming.iso
+  const first = days.find((day) => trainingWeekdays.includes(day.weekday))
+  return first?.iso ?? todayIso
+}
+
 export function cycleProgress(programStartIso: string, today: Date): CycleProgress {
   const start = startOfDay(parseIsoDate(programStartIso))
   const now = startOfDay(today)

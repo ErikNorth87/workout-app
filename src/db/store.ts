@@ -2,12 +2,13 @@ import Dexie, { type Table } from 'dexie'
 import { catalogById } from '../data/lifts'
 import { mondayOnOrBefore, toIsoDate } from '../engine/dates'
 import { trainingMaxFrom1RM } from '../engine/trainingMax'
-import type { JoinedLift, ProgramLift, SessionLog, Settings } from '../types'
+import type { CatalogLift, JoinedLift, ProgramLift, SessionLog, Settings } from '../types'
 
 export class WorkoutDB extends Dexie {
   programLifts!: Table<ProgramLift, string>
   sessionLogs!: Table<SessionLog, string>
   settings!: Table<Settings, number>
+  customLifts!: Table<CatalogLift, string>
 
   constructor() {
     super('workout-tracker')
@@ -18,6 +19,9 @@ export class WorkoutDB extends Dexie {
     })
     this.version(2).stores({
       programLifts: 'id, catalogId, addedAt',
+    })
+    this.version(3).stores({
+      customLifts: 'id',
     })
   }
 }
@@ -47,14 +51,38 @@ export async function saveSettings(patch: Partial<Omit<Settings, 'id'>>): Promis
 }
 
 export async function getProgramLifts(): Promise<ProgramLift[]> {
-  return db.programLifts.orderBy('addedAt').toArray()
+  const lifts = await db.programLifts.toArray()
+  return lifts.sort((a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0))
+}
+
+export async function getCustomLifts(): Promise<CatalogLift[]> {
+  return db.customLifts.toArray()
+}
+
+export async function saveCustomLift(lift: CatalogLift): Promise<void> {
+  await db.customLifts.put(lift)
+}
+
+export async function resolveCatalog(id: string): Promise<CatalogLift | undefined> {
+  return catalogById(id) ?? (await db.customLifts.get(id))
 }
 
 export async function getJoinedLifts(): Promise<JoinedLift[]> {
   const programs = await getProgramLifts()
-  return programs.flatMap((program) => {
-    const catalog = catalogById(program.catalogId)
-    return catalog ? [{ program, catalog }] : []
+  const custom = await getCustomLifts()
+  const customById = new Map(custom.map((lift) => [lift.id, lift]))
+  return programs.map((program) => {
+    const catalog = catalogById(program.catalogId) ??
+      customById.get(program.catalogId) ?? {
+        id: program.catalogId,
+        name: 'Saved lift',
+        pattern: 'isolation' as const,
+        region: 'upper' as const,
+        isMain: false,
+        muscles: [],
+        custom: true,
+      }
+    return { program, catalog }
   })
 }
 
@@ -107,9 +135,10 @@ export async function upsertSessionLog(log: SessionLog): Promise<void> {
 }
 
 export async function clearAllData(): Promise<void> {
-  await db.transaction('rw', db.programLifts, db.sessionLogs, db.settings, async () => {
+  await db.transaction('rw', db.programLifts, db.sessionLogs, db.settings, db.customLifts, async () => {
     await db.programLifts.clear()
     await db.sessionLogs.clear()
     await db.settings.clear()
+    await db.customLifts.clear()
   })
 }

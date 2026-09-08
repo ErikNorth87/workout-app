@@ -101,12 +101,25 @@ function dayCandidates(preferred: number[], count: number): number[][] {
   ]
 }
 
+function dayConflicts(
+  pattern: LiftPattern,
+  day: number,
+  occupied: Array<{ day: number; pattern: LiftPattern }>,
+): boolean {
+  return occupied.some(
+    (entry) =>
+      (entry.day === day || weekdaysConsecutive(day, entry.day)) &&
+      patternsConflict(pattern, entry.pattern),
+  )
+}
+
 export function buildSchedule(items: JoinedLift[], weekdays: number[]): DayPlan[] {
   if (items.length === 0) return []
 
   const heavy = items.filter((item) => isHeavyPattern(item.catalog.pattern))
   const others = items.filter((item) => !isHeavyPattern(item.catalog.pattern))
-  const available = weekdays.length > 0 ? weekdays : DEFAULT_DAYS
+  const available = [...(weekdays.length > 0 ? weekdays : DEFAULT_DAYS)].sort((a, b) => a - b)
+  if (available.length === 0) return []
 
   const heavyByPattern = new Map<LiftPattern, JoinedLift[]>()
   for (const item of heavy) {
@@ -120,36 +133,28 @@ export function buildSchedule(items: JoinedLift[], weekdays: number[]): DayPlan[
     ...[...heavyByPattern.keys()].filter((pattern) => !PREFERRED.includes(pattern)),
   ]
 
-  const targetDays = Math.min(
-    Math.max(heavyPatterns.length, others.length > 0 && heavyPatterns.length === 0 ? 1 : 0),
-    4,
-    available.length || 4,
-  )
-
-  if (targetDays === 0) return []
-
-  const dayCount = Math.max(targetDays, 1)
-  let assignment: Map<LiftPattern, number> | null = null
-  let days: number[] = pickSpreadWeekdays(available, dayCount)
-
+  let assignment = new Map<LiftPattern, number>()
   if (heavyPatterns.length > 0) {
-    const primary = heavyPatterns.slice(0, dayCount)
+    const primary = heavyPatterns.slice(0, Math.min(heavyPatterns.length, 4, available.length))
+    let days = pickSpreadWeekdays(available, primary.length)
+    let placed: Map<LiftPattern, number> | null = null
     for (const candidate of dayCandidates(available, primary.length)) {
-      assignment = placePatterns(primary, candidate)
-      if (assignment) {
+      placed = placePatterns(primary, candidate)
+      if (placed) {
         days = candidate
         break
       }
     }
-    if (!assignment) {
-      assignment = new Map(primary.map((pattern, i) => [pattern, days[i] ?? days[0]!]))
-    }
-  } else {
-    assignment = new Map()
+    assignment = placed ?? new Map(primary.map((pattern, i) => [pattern, days[i] ?? available[0]!]))
   }
 
+  const occupied: Array<{ day: number; pattern: LiftPattern }> = [...assignment].map(([pattern, day]) => ({
+    day,
+    pattern,
+  }))
+  let leftover = available.filter((day) => ![...assignment.values()].includes(day))
+
   const byDay = new Map<number, ScheduledLift[]>()
-  for (const day of days) byDay.set(day, [])
 
   function ensureDay(weekday: number): ScheduledLift[] {
     const existing = byDay.get(weekday)
@@ -159,15 +164,8 @@ export function buildSchedule(items: JoinedLift[], weekdays: number[]): DayPlan[
     return created
   }
 
-  function dayForPattern(pattern: LiftPattern, attachTo?: LiftPattern): number {
-    const host = attachHost(pattern, attachTo)
-    const assigned = assignment?.get(host) ?? assignment?.get(pattern)
-    if (assigned != null) return assigned
-    return days[0]!
-  }
-
   for (const pattern of heavyPatterns) {
-    const weekday = dayForPattern(pattern)
+    const weekday = assignment.get(pattern) ?? available[0]!
     const group = heavyByPattern.get(pattern) ?? []
     group.forEach((item, index) => {
       ensureDay(weekday).push({ ...item, isDayMain: index === 0 })
@@ -175,7 +173,15 @@ export function buildSchedule(items: JoinedLift[], weekdays: number[]): DayPlan[
   }
 
   for (const item of others) {
-    const weekday = dayForPattern(item.catalog.pattern, item.catalog.attachTo)
+    const host = attachHost(item.catalog.pattern, item.catalog.attachTo)
+    let weekday = assignment.get(host) ?? assignment.get(item.catalog.pattern) ?? available[0]!
+    if (leftover.length > 0) {
+      const pick =
+        leftover.find((day) => !dayConflicts(item.catalog.pattern, day, occupied)) ?? leftover[0]!
+      weekday = pick
+      leftover = leftover.filter((day) => day !== pick)
+      occupied.push({ day: pick, pattern: item.catalog.pattern })
+    }
     const list = ensureDay(weekday)
     list.push({ ...item, isDayMain: list.length === 0 })
   }

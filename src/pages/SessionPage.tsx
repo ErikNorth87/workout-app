@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { RestTimer } from '../components/RestTimer'
+import { CycleStrip } from '../components/CycleStrip'
+import { MuscleChips } from '../components/MuscleChips'
+import { WeekStrip } from '../components/WeekStrip'
 import { getJoinedLifts, getSettings, hasCompletedTest, updateProgramLift, upsertSessionLog } from '../db/store'
 import { weekLabel } from '../engine/cycle'
 import {
   cycleProgress,
+  dateForWeekday,
+  mondayForCycleWeek,
+  mondayOnOrBefore,
   parseIsoDate,
+  shiftMonday,
   toIsoDate,
   WEEKDAY_FULL,
 } from '../engine/dates'
 import { buildSchedule } from '../engine/scheduler'
 import { displayToLb, epley1RM, formatWeight, trainingMaxFrom1RM } from '../engine/trainingMax'
 import { workoutForLift, type WorkoutSet } from '../engine/workout'
-import type { JoinedLift, LoggedSet, Settings } from '../types'
+import type { CycleWeek, JoinedLift, LoggedSet, Settings } from '../types'
 
 type Draft = { weight: string; reps: string }
 
@@ -68,20 +75,23 @@ export function SessionPage() {
 
   if (!settings || !progress) return <div className="page muted">Loading…</div>
 
-  if (!day) {
-    return (
-      <main className="page">
-        <p>No lifts scheduled for {WEEKDAY_FULL[weekday]}.</p>
-        <Link to="/">Back to week</Link>
-      </main>
-    )
-  }
-
+  const currentSettings = settings
+  const schedule = buildSchedule(lifts, currentSettings.weekdays)
+  const monday = toIsoDate(mondayOnOrBefore(parseIsoDate(date)))
+  const trainingWeekdays = schedule.map((item) => item.weekday)
   const dayPlan = day
   const currentProgress = progress
-  const currentSettings = settings
+
+  function goDate(iso: string) {
+    navigate(`/session/${iso}`)
+  }
+
+  function onSelectWeek(week: CycleWeek) {
+    goDate(dateForWeekday(mondayForCycleWeek(currentSettings.programStartIso, currentProgress.cycleNumber, week), weekday))
+  }
 
   async function onFinish() {
+    if (!dayPlan) return
     for (const lift of dayPlan.lifts) {
       const workout = workoutForLift(
         lift,
@@ -134,12 +144,36 @@ export function SessionPage() {
   return (
     <>
       <header className="topbar">
-        <h1>{WEEKDAY_FULL[weekday]}</h1>
+        <p className="kicker">{WEEKDAY_FULL[weekday]}</p>
+        <h1>Session</h1>
         <p className="muted">
           {date} · Cycle {progress.cycleNumber} · {weekLabel(progress.cycleWeek)}
         </p>
+        <CycleStrip progress={progress} onSelectWeek={onSelectWeek} />
+        <WeekStrip
+          mondayIso={monday}
+          selectedIso={date}
+          todayIso={toIsoDate(new Date())}
+          trainingWeekdays={trainingWeekdays}
+          doneByDate={{}}
+          onSelect={goDate}
+          onShiftWeek={(delta) => goDate(dateForWeekday(shiftMonday(monday, delta), weekday))}
+        />
       </header>
       <main className="page">
+        {!day ? (
+          <>
+            <section className="empty-card">
+              <p className="kicker">{WEEKDAY_FULL[weekday]}</p>
+              <h2>Rest day</h2>
+              <p className="muted">No lifts on this day. Pick another date on the week strip.</p>
+            </section>
+            <Link className="btn secondary" to="/">
+              Back to week
+            </Link>
+          </>
+        ) : (
+          <>
         {day.lifts.map((lift) => {
           const workout = workoutForLift(
             lift,
@@ -152,6 +186,7 @@ export function SessionPage() {
             <LiftCard
               key={lift.program.id}
               name={lift.catalog.name}
+              muscles={lift.catalog.muscles}
               kind={workout.kind}
               unit={settings.unit}
               sets={workout.sets}
@@ -173,6 +208,8 @@ export function SessionPage() {
         <Link className="btn secondary" to="/">
           Back
         </Link>
+          </>
+        )}
       </main>
     </>
   )
@@ -180,6 +217,7 @@ export function SessionPage() {
 
 function LiftCard({
   name,
+  muscles,
   kind,
   unit,
   sets,
@@ -187,6 +225,7 @@ function LiftCard({
   onChange,
 }: {
   name: string
+  muscles: JoinedLift['catalog']['muscles']
   kind: string
   unit: Settings['unit']
   sets: WorkoutSet[]
@@ -196,22 +235,26 @@ function LiftCard({
   return (
     <section className="card">
       <div className="row">
-        <h2>{name}</h2>
+        <div>
+          <h2>{name}</h2>
+          <MuscleChips muscles={muscles} />
+        </div>
         <span className="badge">{kind === 'testing' ? 'Testing' : '5/3/1'}</span>
       </div>
-      <div className="set-grid muted">
-        <span>#</span>
+      <div className="set-head muted">
         <span>Set</span>
-        <span>Wt</span>
+        <span>Weight</span>
         <span>Reps</span>
       </div>
       {sets.map((set, index) => (
-        <div className="set-grid" key={`${set.role}-${index}`}>
-          <span>{index + 1}</span>
-          <span>
-            {set.role === 'bbb' ? 'BBB 10' : set.isAmrap ? `${set.reps}+` : `${set.reps}`}
-            {set.percentTm != null ? ` · ${Math.round(set.percentTm * 100)}%` : ''}
-          </span>
+        <div className="set-row" key={`${set.role}-${index}`}>
+          <div className="set-meta">
+            <span className="set-num">{index + 1}</span>
+            <span>
+              {set.role === 'bbb' ? 'BBB 10' : set.isAmrap ? `${set.reps}+` : `${set.reps} reps`}
+              {set.percentTm != null ? ` · ${Math.round(set.percentTm * 100)}% TM` : ''}
+            </span>
+          </div>
           <input
             className="input"
             inputMode="decimal"
@@ -229,7 +272,11 @@ function LiftCard({
           {set.restAfterSec > 0 ? <RestTimer seconds={set.restAfterSec} /> : null}
         </div>
       ))}
-      <p className="muted">{sets[0]?.weightLb != null ? `Bar loads in ${formatWeight(sets[0].weightLb, unit)} units.` : 'Enter the top-set weight you actually lifted.'}</p>
+      <p className="muted">
+        {sets[0]?.weightLb != null
+          ? `Bar loads in ${formatWeight(sets[0].weightLb, unit)} units.`
+          : 'Enter the top-set weight you actually lifted.'}
+      </p>
     </section>
   )
 }

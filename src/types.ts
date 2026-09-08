@@ -9,6 +9,20 @@ export type LiftPattern =
 
 export type BodyRegion = 'upper' | 'lower'
 
+export type MuscleGroup =
+  | 'chest'
+  | 'shoulders'
+  | 'triceps'
+  | 'back'
+  | 'lats'
+  | 'biceps'
+  | 'quads'
+  | 'hamstrings'
+  | 'glutes'
+  | 'calves'
+  | 'core'
+  | 'traps'
+
 export type CycleWeek = 1 | 2 | 3 | 4
 
 export type WeightUnit = 'lb' | 'kg'
@@ -19,7 +33,9 @@ export type CatalogLift = {
   pattern: LiftPattern
   region: BodyRegion
   isMain: boolean
+  muscles: MuscleGroup[]
   attachTo?: LiftPattern
+  custom?: boolean
 }
 
 export type ProgramLift = {
