@@ -474,3 +474,21 @@ button { cursor: pointer; }
 .ok { color: var(--ok); }
 .warn { color: var(--accent); }
 .status.ok { background: #143224; color: var(--ok); }
+
+.install-qr {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.install-qr img,
+.install-qr svg {
+  width: 11.5rem;
+  height: 11.5rem;
+  padding: 0.55rem;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.install-qr a { font-size: 0.78rem; word-break: break-all; text-align: center; }
