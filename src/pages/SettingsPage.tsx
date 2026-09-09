@@ -4,6 +4,8 @@ import { clearAllData, getSettings, saveSettings } from '../db/store'
 import type { Settings, WeightUnit } from '../types'
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
+const INSTALL_URL = 'https://eriknorth87.github.io/workout-app/'
+const INSTALL_QR = `${import.meta.env.BASE_URL}install-qr.svg`
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -71,10 +73,13 @@ export function SettingsPage() {
         </section>
         <section className="card">
           <h2>Install on your phone</h2>
-          <p className="muted">
-            Open https://ErikNorth87.github.io/workout-app/ in Safari (iPhone) or Chrome (Android). iPhone: Share →
-            Add to Home Screen. Android: menu → Install app / Add to Home screen.
-          </p>
+          <p className="muted">Scan this code, or open the link in Safari (iPhone) or Chrome (Android). Then: Share → Add to Home Screen, or Chrome menu → Install app.</p>
+          <div className="install-qr">
+            <img src={INSTALL_QR} alt="QR code to install Workout Tracker" width={256} height={256} />
+            <a className="muted" href={INSTALL_URL}>
+              {INSTALL_URL.replace('https://', '')}
+            </a>
+          </div>
         </section>
         <section className="card">
           <h2>Data</h2>
